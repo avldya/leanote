@@ -9,7 +9,7 @@ SP=$(cd "$(dirname "$0")"; pwd)
 tmp="/Users/life/Desktop/leanote_release"
 
 # version
-V="v1.0.1"
+V="v1.4.2"
 
 ##=================================
 # 1. 先build 成 3个平台, 2种bit = 6种
@@ -37,6 +37,7 @@ function build()
 
 build "linux" "386";
 build "linux" "amd64";
+build "linux" "arm";
 
 build "windows" "386";
 build "windows" "amd64";
@@ -121,7 +122,12 @@ function tarRelease()
 	if [ $1 = "linux" -o $1 = "darwin" ]
 	then
 		suffix=""
-		cp ./bin/run.sh $tmp/leanote/bin/
+		if [ $2 = "arm" ]
+		then
+			cp ./bin/run-arm.sh $tmp/leanote/bin/run.sh
+		else
+			cp ./bin/run-$1-$2.sh $tmp/leanote/bin/run.sh
+		fi
 	else
 		cp ./bin/run.bat $tmp/leanote/bin/
 		suffix=".exe"
@@ -135,6 +141,7 @@ function tarRelease()
 
 tarRelease "linux" "386";
 tarRelease "linux" "amd64";
+tarRelease "linux" "arm";
 
 tarRelease "windows" "386";
 tarRelease "windows" "amd64";

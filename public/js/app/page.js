@@ -58,7 +58,7 @@ editorMode.prototype.changeMode = function(isWritingMode) {
 	} else {
 		this.normalMode();
 	}
-}
+};
 
 editorMode.prototype.resizeEditor = function() {
 	// css还没渲染完
@@ -93,13 +93,19 @@ editorMode.prototype.normalMode = function() {
 	
 	$("#noteList").width(UserInfo.NoteListWidth);
 	$("#note").css("left", UserInfo.NoteListWidth);
-}
+
+	this.isWritingMode = false;
+	this.resizeEditor();
+};
 
 editorMode.prototype.writtingMode = function() {
+	if (Note.inBatch) {
+		return;
+	}
 	if(this.$themeLink.attr('href').indexOf('writting-overwrite.css') == -1) {
 		this.$themeLink.attr("href", "/css/theme/writting-overwrite.css");
 	}
-	
+
 	/*
 	setTimeout(function() {
 		var $c = $("#editorContent_ifr").contents();
@@ -126,7 +132,9 @@ editorMode.prototype.writtingMode = function() {
 	
 	// 切换到写模式
 	Note.toggleWriteable();
-}
+
+	this.isWritingMode = true;
+};
 
 editorMode.prototype.getWritingCss = function() {
 	if(this.isWritingMode) {
@@ -288,26 +296,33 @@ var Resize = {
 			resizeEditor();
 		}
 	},
-	
+
+	resizeMDInterval: null,
 	// mdeditor
 	resizeMdColumns: function(event) {
 		var self = this;
 		if (self.mdLineMove) {
 			var mdEditorWidth = event.clientX - self.leftColumn.offset().left; // self.leftNotebook.width() - self.noteList.width();
 			self.setMdColumnWidth(mdEditorWidth);
+
+			clearInterval(self.resizeMDInterval);
+
+			self.resizeMDInterval = setTimeout(function () {
+				MD.resize && MD.resize();
+			}, 50);
 		}
 	},
 	// 设置宽度
 	setMdColumnWidth: function(mdEditorWidth) { 
 		var self = this;
-		if(mdEditorWidth > 100) {
+		var allWidth = $('#note').width();
+		if(mdEditorWidth > 100 && mdEditorWidth < allWidth - 80) {
 			UserInfo.MdEditorWidth = mdEditorWidth;
-			log(mdEditorWidth)
 			self.leftColumn.width(mdEditorWidth);
 			self.rightColumn.css("left", mdEditorWidth);
 			// self.mdSplitter.css("left", mdEditorWidth);
 		}
-		
+
 		// 这样, scrollPreview 才会到正确的位置
 		if(MD) {
 			MD.onResize();
@@ -480,18 +495,26 @@ function initEditor() {
 					e.preventDefault();
 					return;
 				}
-				// 这里就不要了, 避免两次updateNote
-				// Note.saveNote(e);
 
 				// 当输入的时候, 把当前raw删除掉
 				LeaAce.removeCurToggleRaw();
 			});
 			
 			// 为了把下拉菜单关闭
+			/*
 	        ed.on("click", function(e) {
 	          // $("body").trigger("click");
 	          // console.log(tinymce.activeEditor.selection.getNode());
 	        });
+	        */
+	        
+	        // electron下有问题, Ace剪切导致行数减少, #16
+			ed.on('cut', function(e) {
+				if($(e.target).hasClass('ace_text-input')) {
+					e.preventDefault();
+					return;
+				}
+			});
 		},
 		
 		// fix TinyMCE Removes site base url
@@ -501,12 +524,12 @@ function initEditor() {
 		remove_script_host:false,
 		
 		selector : "#editorContent",
-		// height: 100,//这个应该是文档的高度, 而其上层的高度是$("#content").height(),
-		// parentHeight: $("#content").height(),
-		// content_css : ["/css/bootstrap.css", "/css/editor/editor.css"].concat(em.getWritingCss()),
-		content_css : ["/css/editor/editor.css"], // .concat(em.getWritingCss()),
+		
+		// content_css 不再需要
+		// content_css : [LEA.sPath + "/css/editor/editor.css"], // .concat(em.getWritingCss()),
 		skin : "custom",
-		language: LEA.locale, // 语言
+		// tinymce just support en & zh lang currently
+		language: LEA.locale != 'en' && LEA.locale != 'zh' ? 'en' : LEA.locale,
 		plugins : [
 				"autolink link leaui_image lists hr", "paste",
 				"searchreplace leanote_nav leanote_code tabfocus",
@@ -553,11 +576,32 @@ function initEditor() {
 	
 	// 刷新时保存 参考autosave插件
 	window.onbeforeunload = function(e) {
-    	Note.curChangedSaveIt();
+		if (LEA.isLogout) {
+			return;
+		}
+    	Note.curChangedSaveIt(true);
 	}
 
-	// 全局ctrl + s
-	$("body").on('keydown', Note.saveNote);
+	// 全局快捷键
+	// ctrl + s 保存
+	// ctrl+e 切换只读与可写
+	$('body').on('keydown', function (e) {
+		var num = e.which ? e.which : e.keyCode;
+		var ctrlOrMetaKey = e.ctrlKey || e.metaKey;
+	    if(ctrlOrMetaKey) {
+			// 保存
+		    if (num == 83 ) { // ctrl + s or command + s
+		    	Note.curChangedSaveIt();
+		    	e.preventDefault();
+		    	return false;
+		    }
+		    else if (num == 69) { // e
+		    	Note.toggleWriteableAndReadOnly();
+		    	e.preventDefault();
+		    	return false;
+		    }
+	    }
+	});
 }
 
 //-----------------------
@@ -651,23 +695,11 @@ function scrollTo(self, tagName, text) {
 		}
 	});
 	
-	// 打开设置
-	function openSetInfoDialog(whichTab) {
-		showDialogRemote("/user/account", {tab: whichTab});
-	}
-	// 帐号设置
-	$("#setInfo").click(function() {
-		openSetInfoDialog(0);
-	});
 	// 邮箱验证
 	$("#wrongEmail").click(function() {
 		openSetInfoDialog(1);
 	});
 	
-	$("#setAvatarMenu").click(function() {
-		showDialog2("#avatarDialog", {title: "头像设置", postShow: function() {
-		}});
-	});
 	$("#setTheme").click(function() {
 		showDialog2("#setThemeDialog", {title: "主题设置", postShow: function() {
 			if (!UserInfo.Theme) {
@@ -681,22 +713,20 @@ function scrollTo(self, tagName, text) {
 	// 主题
 	$("#themeForm").on("click", "input", function(e) {
 		var val = $(this).val();
-		$("#themeLink").attr("href", "/css/theme/" + val + ".css");
-		
+		var preHref = $("#themeLink").attr("href"); // default.css?id=7
+		var arr = preHref.split('=');
+		var id = 1;
+		if (arr.length == 2) {
+			id = arr[1];
+		}
+		$("#themeLink").attr("href", "/css/theme/" + val + ".css?id=" + id);
 		ajaxPost("/user/updateTheme", {theme: val}, function(re) {
 			if(reIsOk(re)) {
 				UserInfo.Theme = val
 			}
 		});
 	});
-	
-	//-------------
-	// 邮箱验证
-	if(!UserInfo.Verified) {
-//		$("#leanoteMsg").hide();
-//		$("#verifyMsg").show();
-	}
-	
+
 	// 禁止双击选中文字
 	$("#notebook, #newMyNote, #myProfile, #topNav, #notesAndSort", "#leanoteNavTrigger").bind("selectstart", function(e) {
 		e.preventDefault();
@@ -707,39 +737,21 @@ function scrollTo(self, tagName, text) {
 	function updateLeftIsMin(is) {
 		ajaxGet("/user/updateLeftIsMin", {leftIsMin: is})
 	}
+
+	// 最小化左侧
+	var $page = $('#page');
 	function minLeft(save) {
-		$("#leftNotebook").width(30);
-		$("#notebook").hide();
-		// 左侧
-		$("#noteAndEditor").css("left", 30)	
-		$("#notebookSplitter").hide();
-		
-//		$("#leftSwitcher").removeClass("fa-angle-left").addClass("fa-angle-right");
-		
-		// logo
-		$("#logo").hide();
-		$("#leftSwitcher").hide();
-		$("#leftSwitcher2").show();
-		$("#leftNotebook .slimScrollDiv").hide();
-		
+		$page.addClass('mini-left');
 		if(save) {
 			updateLeftIsMin(true);
 		}
 	}
-	
+
+	// 展开右侧
 	function maxLeft(save) {
+		$page.removeClass('mini-left');
 		$("#noteAndEditor").css("left", UserInfo.NotebookWidth);
 		$("#leftNotebook").width(UserInfo.NotebookWidth);
-		$("#notebook").show();
-		$("#notebookSplitter").show();
-		
-//		$("#leftSwitcher").removeClass("fa-angle-right").addClass("fa-angle-left");
-		
-		$("#leftSwitcher2").hide();
-		$("#logo").show();
-		$("#leftSwitcher").show();
-		$("#leftNotebook .slimScrollDiv").show();
-		
 		if(save) {
 			updateLeftIsMin(false);
 		}
@@ -799,6 +811,9 @@ function scrollTo(self, tagName, text) {
 	
 	if (UserInfo.LeftIsMin) {
 		minLeft(false);
+	}
+	else {
+		maxLeft(false);
 	}
 	
 	// end
@@ -917,7 +932,7 @@ var Pjax = {
 		var title = noteInfo.Title;
 		var url = '/note/' + noteId;
 		if (location.href.indexOf('?online') > 0) {
-			url += '?online=1'
+			url += '?online=' + /online=([0-9])/.exec(location.href)[1];
 		}
 		if(location.hash) {
 			url += location.hash;
@@ -1003,6 +1018,7 @@ LeaAce = {
 			$pre.attr("contenteditable", false); // ? 避免tinymce编辑
 			var aceEditor = ace.edit(id);
 
+			aceEditor.container.style.lineHeight = 1.5;
 			aceEditor.setTheme("ace/theme/tomorrow");
 
 			var brush = me.getPreBrush($pre);
@@ -1012,7 +1028,10 @@ LeaAce = {
 					b = brush.split(':')[1];
 				} catch(e) {}
 			}
-			b = b || "javascript";
+			if (!b || b === 'false') {
+				b = 'javascript';
+			}
+			
 			aceEditor.session.setMode("ace/mode/" + b);
 			aceEditor.session.setOption("useWorker", false); // 不用语法检查
 			// retina
@@ -1104,7 +1123,6 @@ LeaAce = {
 					return function() {
 						pre.find('.toggle-raw').remove();
 						var value = pre.html();
-						log(value);
 						value = value.replace(/ /g, "&nbsp;").replace(/\<br *\/*\>/gi,"\n").replace(/</g, '&lt;').replace(/>/g, '&gt;');
 						pre.html(value);
 						var id = pre.attr('id');

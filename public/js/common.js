@@ -204,7 +204,6 @@ function formSerializeDataToJson(formSerializeData) {
 	return $.extend(datas, arrObj);
 }
 
-
 // ajax请求返回结果后的操作
 // 用于ajaxGet(), ajaxPost()
 function _ajaxCallback(ret, successFunc, failureFunc) {
@@ -213,7 +212,7 @@ function _ajaxCallback(ret, successFunc, failureFunc) {
 		// 是否是NOTELOGIN
 		if(ret && typeof ret == "object") {
 			if(ret.Msg == "NOTLOGIN") {
-				alert("你还没有登录, 请先登录!");
+				alert(getMsg("Please sign in firstly!"));
 				return;
 			}
 		}
@@ -229,9 +228,9 @@ function _ajaxCallback(ret, successFunc, failureFunc) {
 	}
 }
 function _ajax(type, url, param, successFunc, failureFunc, async) {
-	log("-------------------ajax:");
-	log(url);
-	log(param);
+	// log("-------------------ajax:");
+	// log(url);
+	// log(param);
 	if(typeof async == "undefined") {
 		async = true;
 	} else {
@@ -279,9 +278,9 @@ function ajaxPost(url, param, successFunc, failureFunc, async) {
 	_ajax("POST", url, param, successFunc, failureFunc, async);
 }
 function ajaxPostJson(url, param, successFunc, failureFunc, async) {
-	log("-------------------ajaxPostJson:");
-	log(url);
-	log(param);
+	// log("-------------------ajaxPostJson:");
+	// log(url);
+	// log(param);
 	
 	// 默认是异步的
 	if(typeof async == "undefined") {
@@ -346,22 +345,6 @@ function getVendorPrefix() {
 
 //-----------------
 
-// 切换编辑器时要修改tabIndex
-function editorIframeTabindex(index) {
-	var $i = $("#editorContent");
-	// var $i = $("#editorContent_ifr");
-	// if($i.size() == 0) {
-		$i.attr("tabindex", index);
-		setTimeout(function() {
-			$i.attr("tabindex", index);
-		}, 500);
-		setTimeout(function() {
-			$i.attr("tabindex", index);
-		}, 1000);
-	// } else {
-		// $i.attr("tabindex", index);
-	// }
-}
 //切换编辑器
 LEA.isM = false;
 LEA.isMarkdownEditor = function() {
@@ -375,19 +358,13 @@ function switchEditor(isMarkdown) {
 		$("#mdEditor").css("z-index", 1).hide();
 		
 		// 刚开始没有
-		editorIframeTabindex(2);
-		$("#wmd-input").attr("tabindex", 3);
 		$("#leanoteNav").show();
 	} else {
 		$("#mdEditor").css("z-index", 3).show();
 		
-		editorIframeTabindex(3);
-		$("#wmd-input").attr("tabindex", 2);
 		$("#leanoteNav").hide();
 	}
 }
-
-
 
 // editor 设置内容
 // 可能是tinymce还没有渲染成功
@@ -411,27 +388,12 @@ function setEditorContent(content, isMarkdown, preview, callback) {
 			}
 		}
 		*/
-
-		$("#editorContent").html(content);
+		// $("#editorContent").html(content);
+		// 不能先setHtml, 因为在tinymce的setContent前要获取之前的content, destory ACE
 		if(typeof tinymce != "undefined" && tinymce.activeEditor) {
 			var editor = tinymce.activeEditor;
-			// console.log('set content');
-			LEA.s4 = new Date();
-			LEA.s4_1 = LEA.s4.getTime()-LEA.s1.getTime();
 			editor.setContent(content);
 			callback && callback();
-			/*
-			if(LeaAce.canAce() && LeaAce.isAce) {
-				try {
-					LeaAce.initAceFromContent(editor);
-				} catch(e) {
-					log(e);
-				}
-			} else {
-				// 为了在firefox下有正常的显示
-				$("#editorContent pre").removeClass("ace-tomorrow ace_editor");
-			}
-			*/
 			editor.undoManager.clear(); // 4-7修复BUG
 		} else {
 			// 等下再设置
@@ -463,9 +425,8 @@ function setEditorContent(content, isMarkdown, preview, callback) {
 	*/
 		if(MD) {
 			MD.setContent(content);
+			MD.clearUndo && MD.clearUndo();
 			callback && callback();
-			LEA.s4 = new Date();
-			LEA.s4_1 = LEA.s4.getTime()-LEA.s1.getTime()
 		} else {
 			clearIntervalForSetContent = setTimeout(function() {
 				setEditorContent(content, true, false, callback);
@@ -491,7 +452,16 @@ function isAceError(val) {
 }
 
 // 有tinymce得到的content有<html>包围
+// 总会出现<p>&nbsp;<br></p>, 原因, setContent('<p><br data-mce-bogus="1" /></p>') 会设置成 <p> <br></p>
+// 所以, 要在getContent时, 当是<p><br data-mce-bogus="1"></p>, 返回 <p><br/></p>
 function getEditorContent(isMarkdown) {
+	var content = _getEditorContent(isMarkdown);
+	if (content === '<p><br data-mce-bogus="1"></p>') {
+		return '<p><br></p>';
+	}
+	return content;
+}
+function _getEditorContent(isMarkdown) {
 	if(!isMarkdown) {
 		var editor = tinymce.activeEditor;
 		if(editor) {
@@ -705,6 +675,13 @@ function goNowToDatetime(goNow) {
 	if(!goNow) {
 		return "";
 	}
+	if (typeof goNow == 'object') {
+		try {
+			return goNow.format("yyyy-M-d hh:mm:ss");
+		} catch(e) {
+			return getCurDate();
+		}
+	}
 	return goNow.substr(0, 10) + " " + goNow.substr(11, 8);
 }
 function getCurDate() {
@@ -746,8 +723,8 @@ function getObjectId() {
 
 //-----------------------------------------
 function resizeEditor(second) {
+	LEA.isM && MD && MD.resize && MD.resize();
 	return;
-	
 	var ifrParent = $("#editorContent_ifr").parent();
     ifrParent.css("overflow", "auto");
     var height = $("#editorContent").height();
@@ -884,6 +861,9 @@ function setCookie(c_name, value, expiredays) {
 	document.cookie = c_name+ "=" + escape(value) + ((expiredays==null) ? "" : ";expires="+exdate.toGMTString()) + 'path=/note';
 }
 function logout() {
+	Note.curChangedSaveIt(true);
+	LEA.isLogout = true;
+
 	setCookie("LEANOTE_SESSION", '', -1);
 	location.href = UrlPrefix + "/logout?id=1";
 }

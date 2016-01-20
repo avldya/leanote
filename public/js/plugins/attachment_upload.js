@@ -1,7 +1,7 @@
 // upload attachment
 // 依赖note
 var urlPrefix = UrlPrefix;
-define('attachment_upload', ['jquery.ui.widget', 'fileupload'], function(){
+define('attachment_upload', ['fileupload'], function(){
 	// Helper function that formats the file sizes
     function formatFileSize(bytes) {
         if (typeof bytes !== 'number') {
@@ -72,7 +72,7 @@ define('attachment_upload', ['jquery.ui.widget', 'fileupload'], function(){
 	        		return;
 	        	}
 
-	            var tpl = $('<div class="alert alert-info"><img class="loader" src="/tinymce/plugins/leaui_image/public/images/ajax-loader.gif"> <a class="close" data-dismiss="alert">×</a></div>');
+	            var tpl = $('<div class="alert alert-info"><img class="loader" src="/images/ajax-loader.gif"> <a class="close" data-dismiss="alert">×</a></div>');
 	
 	            // Append the file name and file size
 	            tpl.append(data.files[0].name + ' <small>[<i>' + formatFileSize(data.files[0].size) + '</i>]</small>');
@@ -139,6 +139,6 @@ define('attachment_upload', ['jquery.ui.widget', 'fileupload'], function(){
 	        }
 	    });
 	};
-
+	
 	initUploader();
 });

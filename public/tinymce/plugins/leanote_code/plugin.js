@@ -2,7 +2,7 @@
  * leanote code plugin
  */
 
-tinymce.PluginManager.requireLangPack('leanote_code');
+// tinymce.PluginManager.requireLangPack('leanote_code');
 
 tinymce.PluginManager.add('leanote_code', function(editor, url) {
 	var me = this;
@@ -50,6 +50,9 @@ tinymce.PluginManager.add('leanote_code', function(editor, url) {
 
 	// brush 刷子
 	function toggleCode(brush) {
+		if (LEA.readOnly) {
+			return;
+		}
 		ed = tinymce.activeEditor;
 		var node = ed.selection.getNode();
 
@@ -280,8 +283,8 @@ tinymce.PluginManager.add('leanote_code', function(editor, url) {
     	}
 		return {
 			type: 'listbox',
-			text: "codeLang",
-			tooltip: "toggleCode",
+			text: "Language",
+			tooltip: "`ctrl/cmd+shift+c` toggle code",
 			values: items,
 			fixedWidth: true,
 			onselect: function(e) {
@@ -331,7 +334,7 @@ tinymce.PluginManager.add('leanote_code', function(editor, url) {
 	ed.addCommand('toggleCode', toggleCode);
     
     ed.addShortcut('ctrl+shift+c', '', 'toggleCode');
-	ed.addShortcut('command+shift+c', '', 'toggleCode');
+	ed.addShortcut('meta+shift+c', '', 'toggleCode');
 
 	// life
 	if(LeaAce.canAce()) {
@@ -365,26 +368,27 @@ tinymce.PluginManager.add('leanote_code', function(editor, url) {
 		var num = e.which ? e.which : e.keyCode;
     	if (num == 9) { // tab pressed
     		if(!e.shiftKey) {
- 				// ed.execCommand('Indent');
-    			// TODO 如果当前在li, ul, ol下不执行!!
-    			// 如果在pre下就加tab
 	    		// var node = ed.selection.getNode();
 	    		/*
 				if(node.nodeName == "PRE") {
                     ed.execCommand('mceInsertHTML', false, '\x09'); // inserts tab
 				} else {
 				*/
+				// 如果是在li下的, 就不要控制
+				var node = ed.selection.getNode();
+				if (node && (node.nodeName == 'LI' || $(node.closest('li')).length > 0)) {
+					return true;
+				}
 				ed.insertContent("&nbsp;&nbsp;&nbsp;&nbsp;");
+	            e.preventDefault();
+	            e.stopPropagation();   			
+	            return false;
                 // ed.execCommand('mceInsertHTML', false, "&nbsp;&nbsp;&nbsp;&nbsp;"); // inserts 空格
 				// }
     		} else {
     			// delete 4 个空格
 				// ed.execCommand('Outdent');
     		}
-    		
-            e.preventDefault();
-            e.stopPropagation();   			
-            return false;
        }
 	});
 });
